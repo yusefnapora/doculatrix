@@ -1,0 +1,39 @@
+{
+  "name": "doculatrix",
+  "version": "1.0.0",
+  "description": "A tool to pull docs from various places and reformat to work with hugo",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "babel src -d lib",
+    "start": "node lib/index.js",
+    "test": "mocha --require @babel/register"
+  },
+  "author": "Yusef Napora <yusef@protocol.ai>",
+  "license": "MIT",
+  "dependencies": {
+    "fast-glob": "^2.2.6",
+    "is-relative-url": "^2.0.0",
+    "joi": "^14.3.1",
+    "js-yaml": "^3.12.2",
+    "mdast-util-definitions": "^1.2.3",
+    "mkdirp": "^0.5.1",
+    "recursive-readdir": "^2.2.2",
+    "remark-frontmatter": "^1.3.1",
+    "remark-parse": "^6.0.3",
+    "remark-stringify": "^6.0.4",
+    "unified": "^7.1.0",
+    "unist-util-visit": "^1.4.0",
+    "yargs": "^13.2.2"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.2.3",
+    "@babel/core": "^7.4.0",
+    "@babel/node": "^7.2.2",
+    "@babel/preset-env": "^7.4.2",
+    "@babel/preset-flow": "^7.0.0",
+    "@babel/register": "^7.4.0",
+    "chai": "^4.2.0",
+    "flow-bin": "^0.95.1",
+    "mocha": "^6.0.2"
+  }
+}

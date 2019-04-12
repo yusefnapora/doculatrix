@@ -1,12 +1,13 @@
 // @flow
 
 import path from 'path'
+import Joi from 'joi'
+import readDir from 'recursive-readdir'
 
 import { ContentMap } from '../content-map'
 import { validate } from '../util'
 import type { ContentMapEntry } from '../content-map'
 
-const Joi = require('joi')
 
 /**
  * A WikiConfig is plan for transforming a clone of a github
@@ -29,11 +30,10 @@ const Joi = require('joi')
  *
  * ### Arguments
  *
- * The required arguments for a `WikiConfig` are the `inputDirectoryPath`
- * of a local wiki repo clone, and an `inputFilePaths` array, which contains
- * the path of every item underneath `inputDirectoryPaths` that you want to
- * include, including things like images that you just want to copy without
- * modification. See below for async helper methods to read those paths
+ * The required arguments for a `WikiConfig` are an `inputFilePaths` array,
+ * which contains the path of every item underneath `inputDirectoryPaths` that
+ * you want to include, including things like images that you just want to copy
+ * without modification. See below for async helper methods to read those paths
  * from the filesystem.
  *
  * You can also optionally give a `metadata` map argument that lets you
@@ -92,17 +92,24 @@ const Joi = require('joi')
  * of input file paths for all the content discovered.
  */
 export default class WikiConfig {
+  static fromWikiDirectory: (inputDirectoryPath: string, options: {}) => Promise<WikiConfig>
+
   options: WikiConfigOptions
   contentMap: ContentMap
 
   constructor (options: WikiConfigOptions) {
-    this.options = validate(options, OptionsSchema)
+    this.options = validate(options, WikiConfigSchema)
     this.contentMap = contentMapFromWikiConfigOptions(this.options)
   }
+}
 
-  static async fromWikiDirectory (inputDirPath: string, options: {}) {
+WikiConfig.fromWikiDirectory = async (inputDirectoryPath: string, options: {}) => {
+  const fullFilePaths = await readDir(inputDirectoryPath)
+  const inputFilePaths = fullFilePaths
+    .map(filePath => filePath.replace(inputDirectoryPath, ''))
+    .filter(filePath => !filePath.startsWith('.'))
 
-  }
+  return new WikiConfig({...options, inputFilePaths})
 }
 
 /**
@@ -111,7 +118,7 @@ export default class WikiConfig {
 export function contentMapFromWikiConfigOptions(options: WikiConfigOptions): ContentMap {
   // TODO: for now, we assume that inputFilePaths are relative to the inputDirectoryPath. maybe revisit
 
-  validate(options, OptionsSchema)
+  validate(options, WikiConfigSchema)
   const metadata = options.metadata || {}
   const entries = options.inputFilePaths.map(filePath => {
     if (filePath.endsWith('.md')) {
@@ -165,9 +172,6 @@ function markdownMapEntry(inputFilePath: string, metadataEntry: ?Object): Conten
  */
 interface WikiConfigOptions {
 
-  /** Path to directory containing input files */
-  inputDirectoryPath: string,
-
   /**
    *   Array of file paths to all contents of `inputDirectoryPath`
    *   that should be used in the generated site. Should include all images, etc.
@@ -181,12 +185,8 @@ interface WikiConfigOptions {
   metadata?: { [string]: any }
 }
 
-const OptionsSchema = Joi.object()
+export const WikiConfigSchema = Joi.object()
   .keys({
-    inputDirectoryPath: Joi.string()
-      .description('Path to directory containing input files')
-      .required(),
-
     inputFilePaths: Joi.array()
       .items(Joi.string())
       .description('File paths to all contents of inputDirectoryPath that should be used in the site.')

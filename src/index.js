@@ -1,3 +1,5 @@
+require('@babel/polyfill')
+
 const { processSite } = require('./reformat')
 const { SiteConfig } = require('./site-config')
 

@@ -1,3 +1,8 @@
+// @flow
+
+import type { ContentMapEntry } from '../content-map'
+import { SiteConfig } from '../site-config'
+
 const fs = require('fs')
 const unified = require('unified')
 const parse = require('remark-parse')
@@ -7,7 +12,6 @@ const wikiImages = require('./wiki-images')
 
 const path = require('path')
 const yaml = require('js-yaml')
-const readDir = require('recursive-readdir')
 
 const { promisify } = require('util')
 const readFile = promisify(fs.readFile)
@@ -21,12 +25,12 @@ async function ensureDirectoryExists(filePath) {
 }
 
 
-async function processMarkdownContent(content, siteConfig) {
+async function processMarkdownContent(content, contentMap) {
   return new Promise((resolve, reject) => {
     unified()
       .use(parse)
       .use(stringify)
-      .use(wikiLinks)
+      .use(wikiLinks, {contentMap})
       .use(wikiImages)
       .process(content, (err, file) => {
         if (err) {
@@ -37,48 +41,42 @@ async function processMarkdownContent(content, siteConfig) {
   })
 }
 
+async function processMarkdownEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
+  const content = await readFile(siteConfig.fullInputFilePath(entry.src), {encoding: 'utf-8'})
+  const processed = await processMarkdownContent(content, siteConfig.contentMap)
 
-async function processSourceEntry(entry, siteConfig) {
-  const {src, dest, frontMatter} = entry
-  const content = await readFile(src, {encoding: 'utf-8'})
-  const processed = await processMarkdownContent(content, siteConfig)
-
-  let serializedFrontMatter = ""
-  if (frontMatter) {
-    serializedFrontMatter = '---\n' + yaml.safeDump(frontMatter) + '---\n'
+  let fullContent = ''
+  if (entry.hugoFrontMatter) {
+    fullContent = yaml.safeDump(entry.hugoFrontMatter) + '\n'
   }
+  fullContent += processed
 
-  const fullContent = serializedFrontMatter + '\n' + processed
+  const dest = siteConfig.fullOutputFilePathForInputFile(entry.src)
 
-  await ensureDirectoryExists(dest)
-  return writeFile(dest, fullContent, {encoding: 'utf-8'})
+  console.info('writing processed input file ' + entry.src + ' to ' + dest)
+  await writeFile(dest, fullContent)
 }
 
-async function copyUnknown(filePath, siteConfig) {
-  if (!siteConfig.copyUnknownInputFiles) {
-    console.log('not copying unknown file ', filePath)
-    return
-  }
-  const relative = path.relative(siteConfig.inputPath, filePath)
-  const dest = path.join(siteConfig.outputPath, relative)
-  await ensureDirectoryExists(dest)
-  console.log('copying ', filePath, ' to ', dest)
-  return copyFile(filePath, dest)
+async function copyEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
+  return copyFile(
+    siteConfig.fullInputFilePath(entry.src),
+    siteConfig.fullOutputFilePathForInputFile(entry.src))
 }
 
-async function processSite(siteConfig) {
-  const files = await readDir(siteConfig.inputPath)
-  const promises = []
+function isMarkdown(entry: ContentMapEntry): boolean {
+  return entry.src.endsWith('.md')
+}
 
-  for (const f of files) {
-    const entry = siteConfig.sourceEntry(f)
+async function processSite(siteConfig: SiteConfig) {
+  const promises = [ensureDirectoryExists(siteConfig.outputPath)]
 
-    if (entry) {
-      promises.push(processSourceEntry(entry, siteConfig))
+  siteConfig.contentMap.entries.forEach(entry => {
+    if (isMarkdown(entry)) {
+      promises.push(processMarkdownEntry(entry, siteConfig))
     } else {
-      promises.push(copyUnknown(f, siteConfig))
+      promises.push(copyEntry(entry, siteConfig))
     }
-  }
+  })
 
   return Promise.all(promises)
 }

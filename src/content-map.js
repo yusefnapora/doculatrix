@@ -20,7 +20,7 @@ export interface ContentMapEntry {
   hugoFrontMatter?: HugoFrontMatter
 }
 
-class ContentMap {
+export class ContentMap {
   entries: Array<ContentMapEntry>
   sourceMap: Map<string, ContentMapEntry>
   wikiTargetMap: Map<string, ContentMapEntry>
@@ -53,7 +53,7 @@ const HugoFrontMatterSchema = Joi.object().keys({
   post: Joi.string().description("Optional HTML content to put after side menu entry")
 }).unknown(true)
 
-const ContentMapEntrySchema = Joi.object().keys({
+export const ContentMapEntrySchema = Joi.object().keys({
   src: Joi.string()
     .description("Path to input file, relative to root inputPath")
     .required(),
@@ -95,5 +95,3 @@ function buildWikiTargetMap(entries: Array<ContentMapEntry>): Map<string, Conten
 }
 
 // endregion validation
-
-module.exports = { ContentMap }

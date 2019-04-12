@@ -6,19 +6,19 @@ const isRelativeUrl = require('is-relative-url')
 const visit = require('unist-util-visit')
 const definitions = require('mdast-util-definitions')
 
-export const hugoRef = (original) => `{{% ref "${original}" %}}`
+export const hugoRef = (original: string) => `{{% ref "${original}" %}}`
 
 function rewriteWikiLinkTarget(url: string, contentMap: ContentMap) {
-  if (contentMap.wikiTargetMap.has(url)) {
+  const entry = contentMap.wikiTargetMap.get(url)
+  if (!entry) {
     return hugoRef(url)
   }
 
-  const entry = contentMap.wikiTargetMap.get(url)
   const dest = contentMap.getOutputPath(entry.src)
   return hugoRef(dest)
 }
 
-function wikiLinkPlugin(opts: {contentMap: ContentMap}) {
+export default function wikiLinkPlugin(opts: {contentMap: ContentMap}) {
   const {contentMap} = opts
 
   return (tree: any) => {
@@ -46,5 +46,3 @@ function wikiLinkPlugin(opts: {contentMap: ContentMap}) {
     visit(tree, ['link', 'linkReference'], visitor)
   }
 }
-
-module.exports = wikiLinkPlugin

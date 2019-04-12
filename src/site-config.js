@@ -1,3 +1,9 @@
+// @flow
+
+import { ContentMap, ContentMapEntrySchema } from './content-map'
+import { validate } from './util'
+import type { ContentMapEntry } from './content-map'
+import WikiConfig from './wiki/wiki-config'
 
 const Joi = require('joi')
 const yaml = require('js-yaml')
@@ -6,39 +12,32 @@ const path = require('path')
 const {promisify} = require('util')
 const readFile = promisify(fs.readFile)
 
-const sourceSchema = Joi.object().keys({
-  src: Joi.string()
-    .description("Path to input file, relative to root inputPath")
-    .required(),
-  dest: Joi.string()
-    .description("Path to output file, relative to root outputPath. Defaults to `src`."),
-  frontMatter: Joi.object()
-    .description("An object to use as hugo front-matter.")
-})
-
-const configSchema = Joi.object().keys({
+const SiteConfigSchema = Joi.object().keys({
   inputPath: Joi.string()
     .description("Path to directory containing input docs. All `src` entries in `sources` are relative to this dir.")
     .required(),
   outputPath: Joi.string()
     .description("Path to directory to use for output. Will be created if it does not exist. All `dest` entries in `sources` are relative to this dir.")
     .required(),
-  copyUnknownInputFiles: Joi.boolean()
-    .description("If true, files that are not present in `sources` will be copied unchanged to the output directory.")
-    .default(true),
-  sources: Joi.array()
-    .description("A collection of `source` objects containing paths to docs and metadata about them.")
-    .items(sourceSchema)
-    .default(() => [], "empty array")
+
+  wiki: Joi.object().keys({
+    deriveContentMap: Joi.boolean().default(true),
+    metadata: Joi.object()
+  }),
+
+  contentMap: Joi.array()
+    .description("Describes how to map input files to output files")
+    .items(ContentMapEntrySchema)
 }).required()
 
-
-function validate(config) {
-  const {error, value} = Joi.validate(config, configSchema)
-  if (error) {
-    throw error
-  }
-  return value
+interface SiteConfigOptions {
+  inputPath: string,
+  outputPath: string,
+  wiki?: {
+    deriveContentMap: boolean,
+    metadata: Object
+  },
+  contentMap: Array<ContentMapEntry>
 }
 
 const fileExists = (filePath) => new Promise((resolve, reject) => {
@@ -57,12 +56,25 @@ const fileExists = (filePath) => new Promise((resolve, reject) => {
 });
 
 class SiteConfig {
-  constructor(...configObjects) {
-    const merged = Object.assign({}, ...configObjects)
-    this._config = validate(merged)
+  _config: SiteConfigOptions
+  contentMap: ContentMap
+
+  constructor(options: SiteConfigOptions) {
+    this._config = validate(options, SiteConfigSchema)
+    this.contentMap = new ContentMap(this._config.contentMap)
   }
 
-  static async fromCommandLineArgs(argv) {
+  static async buildConfig(...configObjects: Array<Object>) {
+    const merged = Object.assign({}, ...configObjects)
+    const options = validate(merged, SiteConfigSchema)
+    if (!options.wiki.deriveContentMap) {
+      return new SiteConfig(options)
+    }
+    const wikiConfig = await WikiConfig.fromWikiDirectory(options.inputPath, options.wiki)
+    return new SiteConfig({...options, contentMap: wikiConfig.contentMap, wikiConfig})
+  }
+
+  static async fromCommandLineArgs(argv: Object) {
     const {inputPath, outputPath} = argv
     const commandLineArgs = { inputPath, outputPath }
     const configFileExists = await fileExists(argv.config)
@@ -75,52 +87,37 @@ class SiteConfig {
         return SiteConfig.fromYamlFile(argv.config, commandLineArgs)
       }
     }
-    return new SiteConfig(commandLineArgs)
+    return this.buildConfig(commandLineArgs)
   }
 
-  static async fromJsonFile(filePath, commandLineOptions) {
+  static async fromJsonFile(filePath: string, commandLineOptions: Object) {
     const content = await readFile(filePath, {encoding: 'utf-8'})
-    return new SiteConfig(JSON.parse(content), commandLineOptions)
+    return this.buildConfig(JSON.parse(content), commandLineOptions)
   }
 
-  static async fromYamlFile(filePath, commandLineOptions) {
+  static async fromYamlFile(filePath: string, commandLineOptions: Object) {
     const content = await readFile(filePath, {encoding: 'utf-8'})
-    return new SiteConfig(yaml.safeLoad(content), commandLineOptions)
+    return this.buildConfig(yaml.safeLoad(content), commandLineOptions)
   }
 
-  get inputPath() {
+  get inputPath(): string {
     return this._config.inputPath
   }
 
-  get outputPath() {
+  get outputPath(): string {
     return this._config.outputPath
   }
 
-  get copyUnknownInputFiles() {
-    return this._config.copyUnknownInputFiles
+  get isWiki(): boolean {
+    return !!this._config.wiki
   }
 
-  _rewritePaths(sourceEntry) {
-    const src = path.join(this.inputPath, sourceEntry.src)
-    const dest = path.join(this.outputPath, sourceEntry.dest || sourceEntry.src)
-    return {...sourceEntry, src, dest}
+  fullInputFilePath(relativeInputFilePath: string): string {
+    return path.join(this.inputPath, relativeInputFilePath)
   }
 
-  get sources () {
-    const entries = this._config.sources || []
-    return entries.map(e => this._rewritePaths(e))
-  }
-
-  get sourcesMap() {
-    return new Map(this.sources.map(s => [s.src, s]))
-  }
-
-  get wikiLinkMap() {
-    return new Map(this._config.sources.map(s => [path.basename(s.src, '.md'), s]))
-  }
-
-  sourceEntry(fullInputPath) {
-    return this.sourcesMap.get(fullInputPath)
+  fullOutputFilePathForInputFile(relativeInputFilePath: string): string {
+    return this.contentMap.getOutputPath(relativeInputFilePath, this.outputPath)
   }
 
 }

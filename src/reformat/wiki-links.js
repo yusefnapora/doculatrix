@@ -1,26 +1,27 @@
-const {URL} = require('url')
+// @flow
+
+import { ContentMap } from '../content-map'
+
 const isRelativeUrl = require('is-relative-url')
 const visit = require('unist-util-visit')
 const definitions = require('mdast-util-definitions')
 
-const hugoRef = (original) => `{{% ref "${original}" %}}`
+export const hugoRef = (original) => `{{% ref "${original}" %}}`
 
-const WIKI_ENTRY_REGEX = /^[A-Z]+.*(?!\..*)$/
-
-function rewriteWikiLinkTarget(url) {
-  if (!url.match(WIKI_ENTRY_REGEX)) {
+function rewriteWikiLinkTarget(url: string, contentMap: ContentMap) {
+  if (contentMap.wikiTargetMap.has(url)) {
     return hugoRef(url)
   }
 
-  const u = new URL(url, 'file://')
-  const dir = u.pathname.toLowerCase()
-  const target = `${dir}/_index.md` + u.search + u.hash
-
-  return hugoRef(target)
+  const entry = contentMap.wikiTargetMap.get(url)
+  const dest = contentMap.getOutputPath(entry.src)
+  return hugoRef(dest)
 }
 
-function wikiLinkPlugin() {
-  return (tree) => {
+function wikiLinkPlugin(opts: {contentMap: ContentMap}) {
+  const {contentMap} = opts
+
+  return (tree: any) => {
     const definition = definitions(tree)
 
     const visitor = (node) => {
@@ -29,15 +30,17 @@ function wikiLinkPlugin() {
         return
       }
 
+      // skip absolute references
       if (!isRelativeUrl(ctx.url)) {
         return
       }
 
+      // skip local anchor links
       if (ctx.url.startsWith('#')) {
         return
       }
 
-      ctx.url = rewriteWikiLinkTarget(ctx.url)
+      ctx.url = rewriteWikiLinkTarget(ctx.url, contentMap)
     }
 
     visit(tree, ['link', 'linkReference'], visitor)

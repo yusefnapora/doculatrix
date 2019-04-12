@@ -1,5 +1,13 @@
 // @flow
 
+import path from 'path'
+
+import { ContentMap } from '../content-map'
+import { validate } from '../util'
+import type { ContentMapEntry } from '../content-map'
+
+const Joi = require('joi')
+
 /**
  * A WikiConfig is plan for transforming a clone of a github
  * wiki repository into a directory full of Markdown files
@@ -11,7 +19,7 @@
  * work the way Hugo expects.
  *
  * The exception are the special files `Home.md` and `_Footer.md`.
- * `Home.md` get turned into Hugo's index page, so it's what renders
+ * `Home.md` gets turned into Hugo's index page, so it's what renders
  * at the `/` route of the generated site.
  *
  * I haven't decided what to do with `_Footer.md` yet - I think making
@@ -19,15 +27,19 @@
  * you could put it into a part of the site layout that makes sense.
  * TODO: figure this out ^^
  *
- * The required arguments for a `WikiConfig` are the `inputPath`
- * of a local wiki repo clone and the `outputPath` where the
- * transformed files should go. Note that `outputPath` is *not*
- * the generated site - it is the massaged Markdown source that
- * gets fed into Hugo as *input* to generate the site.
+ * ### Arguments
  *
- * You can optionally give a `metadata` map argument that lets you
- * set Hugo specific metadata, which gets prepended to the source
- * file as Hugo "front matter" in yaml format.
+ * The required arguments for a `WikiConfig` are the `inputDirectoryPath`
+ * of a local wiki repo clone, and an `inputFilePaths` array, which contains
+ * the path of every item underneath `inputDirectoryPaths` that you want to
+ * include, including things like images that you just want to copy without
+ * modification. See below for async helper methods to read those paths
+ * from the filesystem.
+ *
+ * You can also optionally give a `metadata` map argument that lets you
+ * set Hugo specific metadata, which gets prepended (by a different module)
+ * to the source file as Hugo "front matter" in yaml format during the output
+ * generation phase.
  *
  * The `metadata` map should look like this:
  *
@@ -51,8 +63,134 @@
  * lexicographically (I think... I don't know if it tries to do any
  * fancy localization).
  *
- * You can put whatever you want in the metadata dictionary;
+ * You can put whatever you want in the metadata dictionary. The only
+ * thing we care about is that it's a valid JS object. We also check
+ * for the existence of a `title` field as described above.
+ *
+ * ### About links & images
+ *
+ * This config class isn't responsible for rewriting links, but
+ * it does expose a {@link ContentMap} object that can be used
+ * by the rewriting module to rewrite links correctly.
+ *
+ * In fact, the entire point of this class is to construct a
+ * ContentMap from a wiki source repo, but this was pulled into
+ * a class to make it a bit easier to pass around and examine
+ * the options, etc.
+ *
+ *
+ * ### Usage & async considerations
+ *
+ * The constructor is synchronous by nature, but the intended
+ * usage for this class is to derive much of the config from
+ * the filesystem. Examining the filesystem is async, so we do
+ * that outside the constructor in static async helper methods:
+ *
+ * @link WikiConfig.fromWikiDirectory
+ *
+ * These will scan the filesystem and give the constructor an array
+ * of input file paths for all the content discovered.
  */
 export default class WikiConfig {
+  options: WikiConfigOptions
+  contentMap: ContentMap
 
+  constructor (options: WikiConfigOptions) {
+    this.options = validate(options, OptionsSchema)
+    this.contentMap = contentMapFromWikiConfigOptions(this.options)
+  }
+
+  static async fromWikiDirectory (inputDirPath: string, options: {}) {
+
+  }
 }
+
+/**
+ * Construct ContentMap from WikiConfig options.
+ */
+export function contentMapFromWikiConfigOptions(options: WikiConfigOptions): ContentMap {
+  // TODO: for now, we assume that inputFilePaths are relative to the inputDirectoryPath. maybe revisit
+
+  validate(options, OptionsSchema)
+  const metadata = options.metadata || {}
+  const entries = options.inputFilePaths.map(filePath => {
+    if (filePath.endsWith('.md')) {
+      return markdownMapEntry(filePath, metadata[filePath])
+    }
+    return {
+      src: filePath,
+      dest: path.resolve('/', filePath)
+    }
+  })
+  return new ContentMap(entries)
+}
+
+function sectionFromMarkdownPath(inputFilePath: string): string {
+  const slug = wikiTargetFromMarkdownPath(inputFilePath)
+    .toLowerCase()
+  return `/${slug}/_index.md`
+}
+
+function defaultTitleFromMarkdownPath(inputFilePath: string): string {
+  return wikiTargetFromMarkdownPath(inputFilePath)
+    .replace('-', ' ')
+}
+
+function wikiTargetFromMarkdownPath(inputFilePath: string): string {
+  return path.basename(inputFilePath, '.md')
+}
+
+function destPathForMarkdownPath(inputFilePath: string): string {
+  if (wikiTargetFromMarkdownPath(inputFilePath) === 'Home') {
+    return '/_index.md'
+  }
+  return sectionFromMarkdownPath(inputFilePath)
+}
+
+function markdownMapEntry(inputFilePath: string, metadataEntry: ?Object): ContentMapEntry {
+
+  return {
+    src: inputFilePath,
+    dest: destPathForMarkdownPath(inputFilePath),
+    wikiTarget: wikiTargetFromMarkdownPath(inputFilePath),
+    hugoFrontMatter: {
+      title: defaultTitleFromMarkdownPath(inputFilePath),
+      ...metadataEntry
+    }
+  }
+}
+
+/**
+ * Constructor options for {@link WikiConfig}
+ */
+interface WikiConfigOptions {
+
+  /** Path to directory containing input files */
+  inputDirectoryPath: string,
+
+  /**
+   *   Array of file paths to all contents of `inputDirectoryPath`
+   *   that should be used in the generated site. Should include all images, etc.
+   */
+  inputFilePaths: Array<string>,
+
+  /**
+   * A map of file paths (relative to `inputDirectoryPath`, and without that path as a prefix) to
+   * an object to use as Hugo front matter for the file at that input path.
+   */
+  metadata?: { [string]: any }
+}
+
+const OptionsSchema = Joi.object()
+  .keys({
+    inputDirectoryPath: Joi.string()
+      .description('Path to directory containing input files')
+      .required(),
+
+    inputFilePaths: Joi.array()
+      .items(Joi.string())
+      .description('File paths to all contents of inputDirectoryPath that should be used in the site.')
+      .required(),
+
+    metadata: Joi.object()
+  }).unknown(true)

@@ -28,6 +28,6 @@ const entryForWikiFile = (filePath: string): ContentMapEntry => ({
 })
 
 export function contentMapFromWikiFiles(filePaths: Array<string>): Promise<ContentMap> {
-
+  return Promise.reject(new Error('Not implemented yet'))
 }
 

@@ -1,5 +1,7 @@
 // @flow
 
+import { validate } from './util'
+
 const path = require('path')
 const Joi = require('joi')
 
@@ -19,16 +21,22 @@ export interface ContentMapEntry {
 }
 
 class ContentMap {
+  entries: Array<ContentMapEntry>
+  sourceMap: Map<string, ContentMapEntry>
+  wikiTargetMap: Map<string, ContentMapEntry>
+
   constructor(entries: Array<ContentMapEntry>) {
     this.entries = validateEntries(entries)
     this.sourceMap = buildSourceMap(this.entries)
+    this.wikiTargetMap = buildWikiTargetMap(this.entries)
   }
 
-  getOutputPath(inputFile, outputRoot = '') {
-    if (!this.sourceMap.has(inputFile)) {
+  getOutputPath(inputFile: string, outputRoot: string = '') {
+    const entry = this.sourceMap.get(inputFile)
+    if (!entry) {
       return path.join(outputRoot, inputFile)
     }
-    const { src, dest } = this.sourceMap.get(inputFile)
+    const { src, dest } = entry
     return path.join(outputRoot, path.normalize(dest || src))
   }
 }
@@ -56,14 +64,6 @@ const ContentMapEntrySchema = Joi.object().keys({
   hugoFrontMatter: HugoFrontMatterSchema
 }).unknown(true)
 
-function validate(obj, schema) {
-  const {error, value} = Joi.validate(obj, schema)
-  if (error) {
-    throw error
-  }
-  return value
-}
-
 const validateMapEntry = (entry: any): ContentMapEntry => validate(entry, ContentMapEntrySchema)
 const validateEntries = (entries: Array<any>): Array<ContentMapEntry> => entries.map(validateMapEntry)
 
@@ -73,6 +73,21 @@ function buildSourceMap(entries: Array<ContentMapEntry>): Map<string, ContentMap
     const key = path.normalize(e.src)
     if (m.has(key)) {
       throw new Error('Duplicate entry with src: ' + key)
+    }
+    m.set(key, e)
+  })
+  return m
+}
+
+function buildWikiTargetMap(entries: Array<ContentMapEntry>): Map<string, ContentMapEntry> {
+  const m = new Map()
+  entries.forEach(e => {
+    if (!e.wikiTarget) {
+      return
+    }
+    const key = path.normalize(e.wikiTarget)
+    if (m.has(key)) {
+      throw new Error('Duplicate entry with wikiTarget: ' + key)
     }
     m.set(key, e)
   })

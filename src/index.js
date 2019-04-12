@@ -15,6 +15,10 @@ const argv = require('yargs')
   .alias('c', 'config')
   .default('config', 'doculatrix.yaml')
 
+  .boolean('wiki', 'if set, treat the input path as a github wiki and derive as much config as possible')
+  .alias('w', 'wiki')
+  .default(false)
+
   .demand(['inputPath'])
   .argv
 

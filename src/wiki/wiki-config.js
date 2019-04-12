@@ -105,9 +105,12 @@ export default class WikiConfig {
 
 WikiConfig.fromWikiDirectory = async (inputDirectoryPath: string, options: {}) => {
   const fullFilePaths = await readDir(inputDirectoryPath)
+  const inputDir = path.normalize(inputDirectoryPath)
   const inputFilePaths = fullFilePaths
-    .map(filePath => filePath.replace(inputDirectoryPath, ''))
+    .map(filePath => filePath.replace(inputDir, ''))
+    .map(filePath => filePath.startsWith('/') ? filePath.substr(1) : filePath)
     .filter(filePath => !filePath.startsWith('.'))
+    .filter(filePath => !filePath.startsWith('_'))
 
   return new WikiConfig({...options, inputFilePaths})
 }
@@ -140,7 +143,7 @@ function sectionFromMarkdownPath(inputFilePath: string): string {
 
 function defaultTitleFromMarkdownPath(inputFilePath: string): string {
   return wikiTargetFromMarkdownPath(inputFilePath)
-    .replace('-', ' ')
+    .replace(new RegExp('-', 'g'), ' ')
 }
 
 function wikiTargetFromMarkdownPath(inputFilePath: string): string {

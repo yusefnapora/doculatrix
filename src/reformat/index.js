@@ -1,19 +1,21 @@
 // @flow
 
+import fs from 'fs'
+import path from 'path'
+import { promisify } from 'util'
+
+import yaml from 'js-yaml'
+
+import unified from 'unified'
+import parse from 'remark-parse'
+import stringify from 'remark-stringify'
+import wikiLinks from'./wiki-links'
+import wikiImages from './wiki-images'
+
 import type { ContentMapEntry } from '../content-map'
 import { SiteConfig } from '../site-config'
 
-const fs = require('fs')
-const unified = require('unified')
-const parse = require('remark-parse')
-const stringify = require('remark-stringify')
-const wikiLinks = require('./wiki-links')
-const wikiImages = require('./wiki-images')
 
-const path = require('path')
-const yaml = require('js-yaml')
-
-const { promisify } = require('util')
 const readFile = promisify(fs.readFile)
 const writeFile = promisify(fs.writeFile)
 const copyFile = promisify(fs.copyFile)
@@ -41,26 +43,32 @@ async function processMarkdownContent(content, contentMap) {
   })
 }
 
-async function processMarkdownEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
-  const content = await readFile(siteConfig.fullInputFilePath(entry.src), {encoding: 'utf-8'})
-  const processed = await processMarkdownContent(content, siteConfig.contentMap)
-
-  let fullContent = ''
-  if (entry.hugoFrontMatter) {
-    fullContent = yaml.safeDump(entry.hugoFrontMatter) + '\n'
+function prependFrontMatter(content: string, frontMatter: Object): string {
+  if (!frontMatter) {
+    return content
   }
-  fullContent += processed
+  return '---\n' + yaml.safeDump(frontMatter, {noCompatMode: true}) + '---\n\n' + content
+}
 
+
+async function processMarkdownEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
+  console.log('processMarkdownEntry ', entry)
+  const inputFilePath = siteConfig.fullInputFilePath(entry.src)
+  const content = await readFile(inputFilePath, {encoding: 'utf-8'})
+  const processed = await processMarkdownContent(content, siteConfig.contentMap)
+  const fullContent = prependFrontMatter(processed, entry.hugoFrontMatter)
   const dest = siteConfig.fullOutputFilePathForInputFile(entry.src)
 
-  console.info('writing processed input file ' + entry.src + ' to ' + dest)
+  console.info('writing processed input file ' + inputFilePath + ' to ' + dest)
+  await ensureDirectoryExists(dest)
   await writeFile(dest, fullContent)
 }
 
 async function copyEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
-  return copyFile(
-    siteConfig.fullInputFilePath(entry.src),
-    siteConfig.fullOutputFilePathForInputFile(entry.src))
+  const outputFilePath = siteConfig.fullOutputFilePathForInputFile(entry.src)
+  await ensureDirectoryExists(outputFilePath)
+
+  return copyFile(siteConfig.fullInputFilePath(entry.src), outputFilePath)
 }
 
 function isMarkdown(entry: ContentMapEntry): boolean {
@@ -68,8 +76,9 @@ function isMarkdown(entry: ContentMapEntry): boolean {
 }
 
 async function processSite(siteConfig: SiteConfig) {
-  const promises = [ensureDirectoryExists(siteConfig.outputPath)]
+  const promises = []
 
+  promises.push(ensureDirectoryExists(siteConfig.outputPath))
   siteConfig.contentMap.entries.forEach(entry => {
     if (isMarkdown(entry)) {
       promises.push(processMarkdownEntry(entry, siteConfig))

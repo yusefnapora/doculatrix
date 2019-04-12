@@ -14,21 +14,18 @@ const readFile = promisify(fs.readFile)
 
 const SiteConfigSchema = Joi.object().keys({
   inputPath: Joi.string()
-    .description("Path to directory containing input docs. All `src` entries in `sources` are relative to this dir.")
+    .description('Path to directory containing input docs. All `src` entries in `sources` are relative to this dir.')
     .required(),
   outputPath: Joi.string()
-    .description("Path to directory to use for output. Will be created if it does not exist. All `dest` entries in `sources` are relative to this dir.")
+    .description('Path to directory to use for output. Will be created if it does not exist. All `dest` entries in `sources` are relative to this dir.')
     .required(),
 
   wiki: Joi.object().keys({
     deriveContentMap: Joi.boolean().default(true),
     metadata: Joi.object()
   }),
-
-  contentMap: Joi.array()
-    .description("Describes how to map input files to output files")
-    .items(ContentMapEntrySchema)
-}).required()
+}).unknown()
+  .required()
 
 interface SiteConfigOptions {
   inputPath: string,
@@ -53,30 +50,35 @@ const fileExists = (filePath) => new Promise((resolve, reject) => {
     }
     reject(err)
   })
-});
+})
 
 class SiteConfig {
   _config: SiteConfigOptions
   contentMap: ContentMap
 
-  constructor(options: SiteConfigOptions) {
+  constructor (options: SiteConfigOptions) {
     this._config = validate(options, SiteConfigSchema)
-    this.contentMap = new ContentMap(this._config.contentMap)
+    if (this._config.contentMap instanceof ContentMap) {
+      this.contentMap = this._config.contentMap
+    } else {
+      console.log(this._config)
+      this.contentMap = new ContentMap(this._config.contentMap)
+    }
   }
 
-  static async buildConfig(...configObjects: Array<Object>) {
+  static async buildConfig (...configObjects: Array<Object>) {
     const merged = Object.assign({}, ...configObjects)
     const options = validate(merged, SiteConfigSchema)
-    if (!options.wiki.deriveContentMap) {
+    if (!options.wiki || !options.wiki.deriveContentMap) {
       return new SiteConfig(options)
     }
     const wikiConfig = await WikiConfig.fromWikiDirectory(options.inputPath, options.wiki)
     return new SiteConfig({...options, contentMap: wikiConfig.contentMap, wikiConfig})
   }
 
-  static async fromCommandLineArgs(argv: Object) {
+  static async fromCommandLineArgs (argv: Object) {
     const {inputPath, outputPath} = argv
-    const commandLineArgs = { inputPath, outputPath }
+    const commandLineArgs = {inputPath, outputPath}
     const configFileExists = await fileExists(argv.config)
     if (configFileExists) {
       const ext = path.extname(argv.config).toLowerCase()
@@ -87,39 +89,44 @@ class SiteConfig {
         return SiteConfig.fromYamlFile(argv.config, commandLineArgs)
       }
     }
+    if (argv.wiki) {
+      commandLineArgs.wiki = {deriveContentMap: true}
+    }
     return this.buildConfig(commandLineArgs)
   }
 
-  static async fromJsonFile(filePath: string, commandLineOptions: Object) {
+  static async fromJsonFile (filePath: string, commandLineOptions: Object) {
     const content = await readFile(filePath, {encoding: 'utf-8'})
     return this.buildConfig(JSON.parse(content), commandLineOptions)
   }
 
-  static async fromYamlFile(filePath: string, commandLineOptions: Object) {
+  static async fromYamlFile (filePath: string, commandLineOptions: Object) {
     const content = await readFile(filePath, {encoding: 'utf-8'})
     return this.buildConfig(yaml.safeLoad(content), commandLineOptions)
   }
 
-  get inputPath(): string {
+  get inputPath (): string {
     return this._config.inputPath
   }
 
-  get outputPath(): string {
+  get outputPath (): string {
     return this._config.outputPath
   }
 
-  get isWiki(): boolean {
+  get isWiki (): boolean {
     return !!this._config.wiki
   }
 
-  fullInputFilePath(relativeInputFilePath: string): string {
+  fullInputFilePath (relativeInputFilePath: string): string {
     return path.join(this.inputPath, relativeInputFilePath)
   }
 
-  fullOutputFilePathForInputFile(relativeInputFilePath: string): string {
-    return this.contentMap.getOutputPath(relativeInputFilePath, this.outputPath)
+  fullOutputFilePathForInputFile (relativeInputFilePath: string): string {
+    return this.contentMap.getOutputPath(
+      relativeInputFilePath,
+      this.outputPath)
   }
 
 }
 
-module.exports = { SiteConfig }
+module.exports = {SiteConfig}

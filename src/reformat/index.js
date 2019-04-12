@@ -52,7 +52,6 @@ function prependFrontMatter(content: string, frontMatter: Object): string {
 
 
 async function processMarkdownEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
-  console.log('processMarkdownEntry ', entry)
   const inputFilePath = siteConfig.fullInputFilePath(entry.src)
   const content = await readFile(inputFilePath, {encoding: 'utf-8'})
   const processed = await processMarkdownContent(content, siteConfig.contentMap)
@@ -68,7 +67,9 @@ async function copyEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
   const outputFilePath = siteConfig.fullOutputFilePathForInputFile(entry.src)
   await ensureDirectoryExists(outputFilePath)
 
-  return copyFile(siteConfig.fullInputFilePath(entry.src), outputFilePath)
+  const inputPath = siteConfig.fullInputFilePath(entry.src)
+  console.info(`copying file from ${inputPath} to ${outputFilePath}`)
+  return copyFile(inputPath, outputFilePath)
 }
 
 function isMarkdown(entry: ContentMapEntry): boolean {

@@ -1,2 +1,4 @@
-scratchpad/
-node_modules/
+bin/
+!bin/.gitkeep
+tmp/
+public/

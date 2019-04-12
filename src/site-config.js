@@ -89,9 +89,6 @@ class SiteConfig {
         return SiteConfig.fromYamlFile(argv.config, commandLineArgs)
       }
     }
-    if (argv.wiki) {
-      commandLineArgs.wiki = {deriveContentMap: true}
-    }
     return this.buildConfig(commandLineArgs)
   }
 

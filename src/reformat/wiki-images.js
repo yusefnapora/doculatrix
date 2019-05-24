@@ -1,12 +1,20 @@
+const isRelativeUrl = require('is-relative-url')
 
 const IMAGE_REGEX = /^\[\[(.+)\]\]/
 
+const hugoRef = (base, url) => {
+  if (isRelativeUrl(url)) {
+    return `${base}/${url}`
+  }
+  return url
+}
 
 function locator (value, fromIndex) {
   return value.indexOf('[', fromIndex)
 }
 
-function wikiImagePlugin() {
+function wikiImagePlugin(opts = {baseURL: "/"}) {
+  const {baseURL} = opts
   function inlineTokenizer(eat, value) {
     const match = IMAGE_REGEX.exec(value);
 
@@ -19,7 +27,7 @@ function wikiImagePlugin() {
 
     return eat(fullMatch)({
       type: 'image',
-      url: imageUrl,
+      url: hugoRef(baseURL, imageUrl),
       alt: altText
     });
 

@@ -30,6 +30,7 @@ const SiteConfigSchema = Joi.object().keys({
 interface SiteConfigOptions {
   inputPath: string,
   outputPath: string,
+  baseURL?: string,
   wiki?: {
     deriveContentMap: boolean,
     metadata: Object
@@ -55,6 +56,7 @@ const fileExists = (filePath) => new Promise((resolve, reject) => {
 class SiteConfig {
   _config: SiteConfigOptions
   contentMap: ContentMap
+  baseURL: string
 
   constructor (options: SiteConfigOptions) {
     this._config = validate(options, SiteConfigSchema)
@@ -64,6 +66,8 @@ class SiteConfig {
       console.log(this._config)
       this.contentMap = new ContentMap(this._config.contentMap)
     }
+
+    this.baseURL = options.baseURL || '/'
   }
 
   static async buildConfig (...configObjects: Array<Object>) {

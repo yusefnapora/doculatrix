@@ -27,13 +27,14 @@ async function ensureDirectoryExists(filePath) {
 }
 
 
-async function processMarkdownContent(content, contentMap) {
+async function processMarkdownContent(content, siteConfig) {
+  const {contentMap, baseURL} = siteConfig
   return new Promise((resolve, reject) => {
     unified()
       .use(parse)
       .use(stringify)
       .use(wikiLinks, {contentMap})
-      .use(wikiImages)
+      .use(wikiImages, {baseURL})
       .process(content, (err, file) => {
         if (err) {
           return reject(err)
@@ -54,7 +55,7 @@ function prependFrontMatter(content: string, frontMatter: Object): string {
 async function processMarkdownEntry(entry: ContentMapEntry, siteConfig: SiteConfig) {
   const inputFilePath = siteConfig.fullInputFilePath(entry.src)
   const content = await readFile(inputFilePath, {encoding: 'utf-8'})
-  const processed = await processMarkdownContent(content, siteConfig.contentMap)
+  const processed = await processMarkdownContent(content, siteConfig)
   const fullContent = prependFrontMatter(processed, entry.hugoFrontMatter)
   const dest = siteConfig.fullOutputFilePathForInputFile(entry.src)
 

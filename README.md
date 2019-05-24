@@ -40,9 +40,10 @@ You'll probably want at least a minimal config file. See
 
 ### Running with Docker
 
-There's also a `Dockerfile` in here, and I'll likely push an image to docker hub at some point.
+There's also a `Dockerfile` in here, which you can build with: `docker build . -t doculatrix:latest`
 
-Until then, you can run `docker build . -t doculatrix:latest` to build the image.
+The image is also on docker hub as [sefnap/doculatrix](https://hub.docker.com/r/sefnap/doculatrix),
+so there's no need to build locally to run it; just use `sefnap/doculatrix:latest`.
 
 Then, you can run with
 
@@ -50,7 +51,7 @@ Then, you can run with
 input_dir=/path/to/input/dir
 output_dir=/path/to/output/dir
 config_file=/path/to/config/file
-image="doculatrix:latest"
+image="sefnap/doculatrix:latest"
 
 CMD="docker run -it -v ${input_dir}:/input -v ${output_dir}:/output -v ${config_file}:/doculatrix.yaml ${image}"
 

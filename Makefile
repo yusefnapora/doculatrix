@@ -1,4 +1,4 @@
-NAME   := doculatrix
+NAME   := sefnap/doculatrix
 TAG    := $(shell git log -1 --pretty=%H)
 IMG    := ${NAME}:${TAG}
 LATEST := ${NAME}:latest
